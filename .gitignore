@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+backend/server
+frontend/.next/
+frontend/out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+pgdata/
+
+# Logs
+*.log
