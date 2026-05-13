@@ -1,0 +1,22 @@
+# Fly.io Application Configuration for Go Backend
+
+app = "todo-management-backend"
+primary_region = "iad"
+
+[build]
+  dockerfile_path = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[deploy]
+  strategy = "immediate"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+
+[[services]]
+  http_checks = []
+  processes = ["app"]

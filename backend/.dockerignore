@@ -1,0 +1,30 @@
+# Docker build context exclusions for Fly.io
+
+# Debug files (excluded from production build)
+cmd/main_debug.go
+cmd/diagnose_routes.go
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Build artifacts
+.next/
+node_modules/
+dist/
+
+# Documentation
+*.md
+!DEPLOYMENT.md
+
+# Test files
+*_test.go
