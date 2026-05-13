@@ -91,7 +91,15 @@ func (r *TaskRepository) FindAll(filter *models.TaskFilter, userID uint, isAdmin
 	query := r.db.Model(&models.Task{})
 
 	if !isAdmin {
-		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+		if filter.ProjectID != nil {
+			// Project-scoped: all project members see all tasks in the project
+			query = query.Where(
+				"project_id = ? AND EXISTS (SELECT 1 FROM project_members WHERE project_id = tasks.project_id AND user_id = ?)",
+				*filter.ProjectID, userID,
+			)
+		} else {
+			query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+		}
 	}
 
 	if filter.Search != "" {
@@ -107,7 +115,10 @@ func (r *TaskRepository) FindAll(filter *models.TaskFilter, userID uint, isAdmin
 		query = query.Where("category_id = ?", *filter.CategoryID)
 	}
 	if filter.AssigneeID != nil {
-		query = query.Where("id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", *filter.AssigneeID)
+		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", *filter.AssigneeID, *filter.AssigneeID)
+	}
+	if filter.ProjectID != nil {
+		query = query.Where("project_id = ?", *filter.ProjectID)
 	}
 	if filter.DueDateFrom != "" {
 		query = query.Where("due_date >= ?", filter.DueDateFrom)
@@ -130,8 +141,8 @@ func (r *TaskRepository) FindAll(filter *models.TaskFilter, userID uint, isAdmin
 	offset := (page - 1) * limit
 
 	var tasks []models.Task
-	err := query.Preload("Category").Preload("Creator").Preload("Assignees").
-		Order("created_at DESC").
+	err := query.Preload("Category").Preload("Project").Preload("Creator").Preload("Assignees").
+		Order("updated_at DESC").
 		Offset(offset).Limit(limit).
 		Find(&tasks).Error
 	if err != nil {
@@ -148,30 +159,36 @@ func (r *TaskRepository) FindAll(filter *models.TaskFilter, userID uint, isAdmin
 	}, nil
 }
 
-func (r *TaskRepository) CountByStatus(status models.TaskStatus, userID uint, isAdmin bool) (int64, error) {
+func (r *TaskRepository) CountByStatus(status models.TaskStatus, userID uint, isAdmin bool, projectID *uint) (int64, error) {
 	var count int64
 	query := r.db.Model(&models.Task{}).Where("status = ?", status)
 	if !isAdmin {
 		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
 	}
-	err := query.Count(&count).Error
-	return count, err
-}
-
-func (r *TaskRepository) CountOverdue(userID uint, isAdmin bool) (int64, error) {
-	var count int64
-	now := time.Now()
-	today := strings.Split(now.Format("2006-01-02T15:04:05"), "T")[0]
-	query := r.db.Model(&models.Task{}).
-		Where("status != ? AND due_date IS NOT NULL AND due_date < ?", models.StatusCompleted, today)
-	if !isAdmin {
-		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+	if projectID != nil {
+		query = query.Where("project_id = ?", *projectID)
 	}
 	err := query.Count(&count).Error
 	return count, err
 }
 
-func (r *TaskRepository) CountByCategory(userID uint, isAdmin bool) ([]models.CategoryCount, error) {
+func (r *TaskRepository) CountOverdue(userID uint, isAdmin bool, projectID *uint) (int64, error) {
+	var count int64
+	now := time.Now()
+	today := strings.Split(now.Format("2006-01-02T15:04:05"), "T")[0]
+	query := r.db.Model(&models.Task{}).
+		Where("status != ? AND due_date IS NOT NULL AND due_date < ?", models.StatusDone, today)
+	if !isAdmin {
+		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+	}
+	if projectID != nil {
+		query = query.Where("project_id = ?", *projectID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+func (r *TaskRepository) CountByCategory(userID uint, isAdmin bool, projectID *uint) ([]models.CategoryCount, error) {
 	var results []models.CategoryCount
 	query := r.db.Model(&models.Task{}).
 		Select("COALESCE(c.name, 'Uncategorized') as category, COUNT(*) as count").
@@ -180,17 +197,23 @@ func (r *TaskRepository) CountByCategory(userID uint, isAdmin bool) ([]models.Ca
 	if !isAdmin {
 		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
 	}
+	if projectID != nil {
+		query = query.Where("tasks.project_id = ?", *projectID)
+	}
 	err := query.Find(&results).Error
 	return results, err
 }
 
-func (r *TaskRepository) CountByPriority(userID uint, isAdmin bool) ([]models.PriorityCount, error) {
+func (r *TaskRepository) CountByPriority(userID uint, isAdmin bool, projectID *uint) ([]models.PriorityCount, error) {
 	var results []models.PriorityCount
 	query := r.db.Model(&models.Task{}).
 		Select("priority, COUNT(*) as count").
 		Group("priority")
 	if !isAdmin {
 		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+	}
+	if projectID != nil {
+		query = query.Where("project_id = ?", *projectID)
 	}
 	err := query.Find(&results).Error
 	return results, err

@@ -18,6 +18,7 @@ func main() {
 
 	db := config.ConnectDB(cfg)
 	config.Migrate(db)
+	config.SeedAdminUser(db)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -31,22 +32,33 @@ func main() {
 
 	app.Use(middleware.CORS(cfg))
 
+	// Repositories
 	userRepo := repositories.NewUserRepository(db)
 	taskRepo := repositories.NewTaskRepository(db)
 	catRepo := repositories.NewCategoryRepository(db)
 	activityRepo := repositories.NewActivityLogRepository(db)
+	notifRepo := repositories.NewNotificationRepository(db)
+	projectRepo := repositories.NewProjectRepository(db)
 
+	// Services
 	authService := services.NewAuthService(userRepo, cfg)
-	taskService := services.NewTaskService(taskRepo, userRepo, activityRepo)
+	taskService := services.NewTaskService(taskRepo, userRepo, activityRepo, projectRepo)
 	catService := services.NewCategoryService(catRepo)
 	dashService := services.NewDashboardService(taskRepo)
+	notifService := services.NewNotificationService(notifRepo, projectRepo)
+	projectService := services.NewProjectService(projectRepo, notifRepo)
 
+	// Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userRepo)
 	taskHandler := handlers.NewTaskHandler(taskService)
 	catHandler := handlers.NewCategoryHandler(catService)
 	dashHandler := handlers.NewDashboardHandler(dashService)
+	notifHandler := handlers.NewNotificationHandler(notifService)
+	avatarHandler := handlers.NewAvatarHandler(userRepo)
+	projectHandler := handlers.NewProjectHandler(projectService)
 
+	// Routes
 	api := app.Group("/api")
 
 	api.Post("/auth/register", authHandler.Register)
@@ -69,6 +81,27 @@ func main() {
 	protected.Delete("/categories/:id", catHandler.Delete)
 
 	protected.Get("/dashboard/summary", dashHandler.GetSummary)
+
+	protected.Get("/notifications", notifHandler.GetAll)
+	protected.Get("/notifications/unread-count", notifHandler.GetUnreadCount)
+	protected.Put("/notifications/:id/read", notifHandler.MarkRead)
+	protected.Put("/notifications/read-all", notifHandler.MarkAllRead)
+	protected.Put("/notifications/:id/accept", notifHandler.AcceptInvitation)
+	protected.Put("/notifications/:id/decline", notifHandler.DeclineInvitation)
+
+	protected.Put("/users/avatar", avatarHandler.UpdateAvatar)
+
+	protected.Get("/projects", projectHandler.GetAll)
+	protected.Post("/projects", projectHandler.Create)
+	protected.Get("/projects/:id", projectHandler.GetByID)
+	protected.Put("/projects/:id", projectHandler.Update)
+	protected.Delete("/projects/:id", projectHandler.Delete)
+	protected.Post("/projects/:id/members", projectHandler.AddMember)
+	protected.Post("/projects/:id/invite", projectHandler.InviteMember)
+	protected.Delete("/projects/:id/members/:userId", projectHandler.RemoveMember)
+
+	// Start background deadline reminder scheduler
+	notifService.StartReminderScheduler()
 
 	log.Printf("Server starting on port %s", cfg.Port)
 	if err := app.Listen(":" + cfg.Port); err != nil {

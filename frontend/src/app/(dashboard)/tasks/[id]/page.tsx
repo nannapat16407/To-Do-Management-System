@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useParams } from "next/navigation";
 import { useState } from "react";
 import api from "@/lib/api";
-import type { Task, Category } from "@/lib/types";
+import type { Task, Category, Project } from "@/lib/types";
+import { useAuth } from "@/contexts/auth-context";
+import UserAvatar from "@/components/ui/user-avatar";
 import { ArrowLeft, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -13,6 +15,7 @@ export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
   const id = params.id as string;
 
   const [editing, setEditing] = useState(false);
@@ -22,6 +25,7 @@ export default function TaskDetailPage() {
   const [priority, setPriority] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +43,12 @@ export default function TaskDetailPage() {
     queryFn: async () => (await api.get<Category[]>("/categories")).data,
   });
 
+  const { data: projectDetail } = useQuery({
+    queryKey: ["project", String(task?.project_id)],
+    queryFn: async () => (await api.get<Project>(`/projects/${task?.project_id}`)).data,
+    enabled: !!task?.project_id,
+  });
+
   const startEdit = () => {
     if (!task) return;
     setTitle(task.title);
@@ -47,12 +57,20 @@ export default function TaskDetailPage() {
     setPriority(task.priority);
     setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
     setCategoryId(task.category_id ? String(task.category_id) : "");
+    setAssigneeIds(task.assignees?.map((a) => a.id) || []);
     setEditing(true);
   };
 
   const handleSave = async () => {
     setSaving(true);
     setError("");
+
+    if (assigneeIds.length === 0) {
+      setError("At least one assignee is required.");
+      setSaving(false);
+      return;
+    }
+
     try {
       await api.put(`/tasks/${id}`, {
         title,
@@ -61,9 +79,12 @@ export default function TaskDetailPage() {
         priority,
         due_date: dueDate || null,
         category_id: categoryId ? parseInt(categoryId) : null,
+        assignee_ids: assigneeIds,
       });
       queryClient.invalidateQueries({ queryKey: ["task", id] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["project-tasks"] });
       setEditing(false);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to update task";
@@ -78,16 +99,25 @@ export default function TaskDetailPage() {
     try {
       await api.delete(`/tasks/${id}`);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      router.push("/tasks");
+      queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["project-tasks"] });
+      router.push("/my-tasks");
     } catch {
       setError("Failed to delete task");
     }
   };
 
+  const toggleAssignee = (uid: number) => {
+    setAssigneeIds((prev) =>
+      prev.includes(uid) ? prev.filter((i) => i !== uid) : [...prev, uid]
+    );
+  };
+
   const statusColors: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-700",
+    todo: "bg-slate-100 text-slate-700",
     in_progress: "bg-blue-100 text-blue-700",
-    completed: "bg-green-100 text-green-700",
+    in_review: "bg-amber-100 text-amber-700",
+    done: "bg-green-100 text-green-700",
   };
 
   const priorityColors: Record<string, string> = {
@@ -95,6 +125,9 @@ export default function TaskDetailPage() {
     medium: "bg-orange-100 text-orange-700",
     high: "bg-red-100 text-red-700",
   };
+
+  const isCreator = task?.created_by === currentUser?.id;
+  const allMembers = projectDetail?.members || [];
 
   if (isLoading) {
     return (
@@ -112,7 +145,7 @@ export default function TaskDetailPage() {
       <div className="max-w-2xl mx-auto">
         <div className="neu-flat p-12 text-center">
           <p className="text-muted-foreground">Task not found</p>
-          <Link href="/tasks" className="text-primary mt-2 inline-block">Back to Tasks</Link>
+          <Link href="/my-tasks" className="text-primary mt-2 inline-block">Back to Tasks</Link>
         </div>
       </div>
     );
@@ -122,7 +155,7 @@ export default function TaskDetailPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/tasks" className="neu-flat p-2 rounded-xl">
+          <Link href="/my-tasks" className="neu-flat p-2 rounded-xl">
             <ArrowLeft size={18} />
           </Link>
           <h1 className="text-2xl font-bold">Task Details</h1>
@@ -130,12 +163,16 @@ export default function TaskDetailPage() {
         <div className="flex gap-2">
           {!editing ? (
             <>
-              <button onClick={startEdit} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90">
-                Edit
-              </button>
-              <button onClick={handleDelete} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20">
-                <Trash2 size={18} />
-              </button>
+              {isCreator && (
+                <>
+                  <button onClick={startEdit} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90">
+                    Edit
+                  </button>
+                  <button onClick={handleDelete} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20">
+                    <Trash2 size={18} />
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -172,9 +209,10 @@ export default function TaskDetailPage() {
                 <label className="block text-sm font-medium mb-2">Status</label>
                 <select value={status} onChange={(e) => setStatus(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl neu-pressed bg-transparent outline-none text-sm">
-                  <option value="pending">Pending</option>
+                  <option value="todo">To Do</option>
                   <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
+                  <option value="in_review">In Review</option>
+                  <option value="done">Done</option>
                 </select>
               </div>
               <div>
@@ -202,6 +240,29 @@ export default function TaskDetailPage() {
                 ))}
               </select>
             </div>
+
+            {allMembers.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Assignees <span className="text-destructive">*</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {allMembers.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleAssignee(m.id)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                        assigneeIds.includes(m.id)
+                          ? "bg-primary text-primary-foreground"
+                          : "neu-convex text-muted-foreground"
+                      }`}
+                    >
+                      <UserAvatar name={m.name} avatarUrl={m.avatar_url} size="sm" className="!w-4 !h-4 !text-[8px]" />
+                      <span>{m.name}{m.id === currentUser?.id ? " (you)" : ""}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -229,7 +290,10 @@ export default function TaskDetailPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">Created by</span>
-                <p className="font-medium">{task.creator?.name || "Unknown"}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <UserAvatar name={task.creator?.name || "Unknown"} avatarUrl={task.creator?.avatar_url} size="sm" className="!w-5 !h-5 !text-[8px]" />
+                  <span className="font-medium">{task.creator?.name || "Unknown"}</span>
+                </div>
               </div>
               {task.due_date && (
                 <div>
@@ -252,9 +316,10 @@ export default function TaskDetailPage() {
                 <span className="text-sm text-muted-foreground">Assigned to</span>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {task.assignees.map((a) => (
-                    <span key={a.id} className="px-3 py-1.5 rounded-xl neu-convex text-sm">
-                      {a.name}
-                    </span>
+                    <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl neu-convex" title={`${a.name} (${a.email})`}>
+                      <UserAvatar name={a.name} avatarUrl={a.avatar_url} size="sm" className="!w-5 !h-5 !text-[8px]" />
+                      <span className="text-sm">{a.name}</span>
+                    </div>
                   ))}
                 </div>
               </div>

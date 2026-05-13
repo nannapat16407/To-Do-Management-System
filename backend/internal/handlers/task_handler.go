@@ -28,6 +28,16 @@ func (h *TaskHandler) Create(c *fiber.Ctx) error {
 			Error: "title is required",
 		})
 	}
+	if req.Description == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
+			Error: "description is required",
+		})
+	}
+	if req.ProjectID == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
+			Error: "project_id is required",
+		})
+	}
 
 	userID := c.Locals("user_id").(uint)
 	isAdmin := c.Locals("role").(string) == string(models.RoleAdmin)
@@ -110,6 +120,7 @@ func (h *TaskHandler) GetAll(c *fiber.Ctx) error {
 	isAdmin := c.Locals("role").(string) == string(models.RoleAdmin)
 
 	categoryID, _ := strconv.Atoi(c.Query("category_id"))
+	projectID, _ := strconv.Atoi(c.Query("project_id"))
 	assigneeID, _ := strconv.Atoi(c.Query("assignee_id"))
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
@@ -127,6 +138,10 @@ func (h *TaskHandler) GetAll(c *fiber.Ctx) error {
 	if categoryID > 0 {
 		cid := uint(categoryID)
 		filter.CategoryID = &cid
+	}
+	if projectID > 0 {
+		pid := uint(projectID)
+		filter.ProjectID = &pid
 	}
 	if assigneeID > 0 {
 		aid := uint(assigneeID)

@@ -1,10 +1,42 @@
 "use client";
 
+import { useRef } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "@/lib/api";
+import type { User } from "@/lib/types";
+import UserAvatar from "@/components/ui/user-avatar";
+import { Camera } from "lucide-react";
 import { format } from "date-fns";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, login } = useAuth();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const avatarMutation = useMutation({
+    mutationFn: async (avatarUrl: string) => {
+      const res = await api.put<User>("/users/avatar", { avatar_url: avatarUrl });
+      return res.data;
+    },
+    onSuccess: (updatedUser) => {
+      const token = localStorage.getItem("token") || "";
+      login(token, updatedUser);
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      avatarMutation.mutate(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (!user) return null;
 
@@ -13,12 +45,32 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold">Profile</h1>
 
       <div className="neu-flat p-8 text-center">
-        <div className="w-20 h-20 neu-convex rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-3xl font-bold text-primary">
-            {user.name[0].toUpperCase()}
-          </span>
+        <div className="relative inline-block group">
+          <UserAvatar
+            name={user.name}
+            avatarUrl={user.avatar_url}
+            size="lg"
+            className="mx-auto"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarMutation.isPending}
+            className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
+          >
+            <Camera size={14} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
         </div>
-        <h2 className="text-xl font-bold">{user.name}</h2>
+        {avatarMutation.isPending && (
+          <p className="text-xs text-muted-foreground mt-2">Uploading...</p>
+        )}
+        <h2 className="text-xl font-bold mt-4">{user.name}</h2>
         <p className="text-muted-foreground">{user.email}</p>
         <span className="inline-block mt-2 px-3 py-1 rounded-xl bg-primary/10 text-primary text-sm font-medium capitalize">
           {user.role}

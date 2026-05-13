@@ -13,26 +13,28 @@ func NewDashboardService(taskRepo *repositories.TaskRepository) *DashboardServic
 	return &DashboardService{taskRepo: taskRepo}
 }
 
-func (s *DashboardService) GetSummary(userID uint, isAdmin bool) (*models.DashboardSummary, error) {
-	filter := &models.TaskFilter{Page: 1, Limit: 1}
+func (s *DashboardService) GetSummary(userID uint, isAdmin bool, projectID *uint) (*models.DashboardSummary, error) {
+	filter := &models.TaskFilter{Page: 1, Limit: 1, ProjectID: projectID}
 	result, err := s.taskRepo.FindAll(filter, userID, isAdmin)
 	if err != nil {
 		return nil, err
 	}
 	total := result.Total
 
-	completed, _ := s.taskRepo.CountByStatus(models.StatusCompleted, userID, isAdmin)
-	pending, _ := s.taskRepo.CountByStatus(models.StatusPending, userID, isAdmin)
-	overdue, _ := s.taskRepo.CountOverdue(userID, isAdmin)
-	byCategory, _ := s.taskRepo.CountByCategory(userID, isAdmin)
-	byPriority, _ := s.taskRepo.CountByPriority(userID, isAdmin)
+	todoCount, _ := s.taskRepo.CountByStatus(models.StatusTodo, userID, isAdmin, projectID)
+	inProgressCount, _ := s.taskRepo.CountByStatus(models.StatusInProgress, userID, isAdmin, projectID)
+	doneCount, _ := s.taskRepo.CountByStatus(models.StatusDone, userID, isAdmin, projectID)
+	overdue, _ := s.taskRepo.CountOverdue(userID, isAdmin, projectID)
+	byCategory, _ := s.taskRepo.CountByCategory(userID, isAdmin, projectID)
+	byPriority, _ := s.taskRepo.CountByPriority(userID, isAdmin, projectID)
 
 	return &models.DashboardSummary{
-		TotalTasks:     total,
-		CompletedTasks: completed,
-		PendingTasks:   pending,
-		OverdueTasks:   overdue,
-		ByCategory:     byCategory,
-		ByPriority:     byPriority,
+		TotalTasks:      total,
+		TodoTasks:       todoCount,
+		InProgressTasks: inProgressCount,
+		DoneTasks:       doneCount,
+		OverdueTasks:    overdue,
+		ByCategory:      byCategory,
+		ByPriority:      byPriority,
 	}, nil
 }

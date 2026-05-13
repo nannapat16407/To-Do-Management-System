@@ -56,3 +56,7 @@ func (r *UserRepository) FindByIDs(ids []uint) ([]models.User, error) {
 	err := r.db.Where("id IN ?", ids).Find(&users).Error
 	return users, err
 }
+
+func (r *UserRepository) UpdateAvatar(id uint, avatarURL string) error {
+	return r.db.Model(&models.User{}).Where("id = ?", id).Update("avatar_url", avatarURL).Error
+}

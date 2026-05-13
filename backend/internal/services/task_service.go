@@ -14,22 +14,25 @@ type TaskService struct {
 	taskRepo     *repositories.TaskRepository
 	userRepo     *repositories.UserRepository
 	activityRepo *repositories.ActivityLogRepository
+	projectRepo  *repositories.ProjectRepository
 }
 
 func NewTaskService(
 	taskRepo *repositories.TaskRepository,
 	userRepo *repositories.UserRepository,
 	activityRepo *repositories.ActivityLogRepository,
+	projectRepo *repositories.ProjectRepository,
 ) *TaskService {
 	return &TaskService{
 		taskRepo:     taskRepo,
 		userRepo:     userRepo,
 		activityRepo: activityRepo,
+		projectRepo:  projectRepo,
 	}
 }
 
 func (s *TaskService) Create(req *models.CreateTaskRequest, userID uint) (*models.Task, error) {
-	status := models.StatusPending
+	status := models.StatusTodo
 	if req.Status != "" {
 		status = models.TaskStatus(req.Status)
 	}
@@ -47,17 +50,46 @@ func (s *TaskService) Create(req *models.CreateTaskRequest, userID uint) (*model
 		dueDate = dd
 	}
 
+	var startDate *time.Time
+	if req.StartDate != nil && *req.StartDate != "" {
+		sd, err := models.ParseDueDate(*req.StartDate)
+		if err != nil {
+			return nil, errors.New("invalid start date format, use YYYY-MM-DD")
+		}
+		startDate = sd
+	} else {
+		now := time.Now()
+		startDate = &now
+	}
+
 	task := &models.Task{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      status,
 		Priority:    priority,
+		StartDate:   startDate,
 		DueDate:     dueDate,
 		CategoryID:  req.CategoryID,
+		ProjectID:   req.ProjectID,
 		CreatedBy:   userID,
 	}
 
-	if err := s.taskRepo.Create(task, req.AssigneeIDs); err != nil {
+	assigneeIDs := req.AssigneeIDs
+	if len(assigneeIDs) == 0 {
+		return nil, errors.New("at least one assignee is required")
+	}
+
+	// Validate all assignees are project members
+	if req.ProjectID != nil {
+		for _, aid := range assigneeIDs {
+			isMember, err := s.projectRepo.IsMember(*req.ProjectID, aid)
+			if err != nil || !isMember {
+				return nil, errors.New("assigned user must be a member of this project")
+			}
+		}
+	}
+
+	if err := s.taskRepo.Create(task, assigneeIDs); err != nil {
 		return nil, err
 	}
 
@@ -102,15 +134,48 @@ func (s *TaskService) Update(id uint, req *models.UpdateTaskRequest, userID uint
 		}
 		changes["due_date"] = "updated"
 	}
+	if req.StartDate != nil {
+		if *req.StartDate != "" {
+			sd, err := models.ParseDueDate(*req.StartDate)
+			if err != nil {
+				return nil, errors.New("invalid start date format")
+			}
+			task.StartDate = sd
+		} else {
+			task.StartDate = nil
+		}
+		changes["start_date"] = "updated"
+	}
 	if req.CategoryID != nil {
 		task.CategoryID = req.CategoryID
 		changes["category"] = "updated"
 	}
+	if req.ProjectID != nil {
+		task.ProjectID = req.ProjectID
+		changes["project"] = "updated"
+	}
 
 	var assigneeIDs []uint
 	if req.AssigneeIDs != nil {
+		if len(req.AssigneeIDs) == 0 {
+			return nil, errors.New("at least one assignee is required")
+		}
 		assigneeIDs = req.AssigneeIDs
 		changes["assignees"] = "updated"
+	}
+
+	// Validate all new assignees are project members
+	effectiveProjectID := task.ProjectID
+	if req.ProjectID != nil {
+		effectiveProjectID = req.ProjectID
+	}
+	if effectiveProjectID != nil && len(assigneeIDs) > 0 {
+		for _, aid := range assigneeIDs {
+			isMember, err := s.projectRepo.IsMember(*effectiveProjectID, aid)
+			if err != nil || !isMember {
+				return nil, errors.New("assigned user must be a member of this project")
+			}
+		}
 	}
 
 	if err := s.taskRepo.Update(task, assigneeIDs); err != nil {

@@ -23,8 +23,10 @@ type CreateTaskRequest struct {
 	Description string   `json:"description"`
 	Status      string   `json:"status"`
 	Priority    string   `json:"priority"`
+	StartDate   *string  `json:"start_date"`
 	DueDate     *string  `json:"due_date"`
 	CategoryID  *uint    `json:"category_id"`
+	ProjectID   *uint    `json:"project_id"`
 	AssigneeIDs []uint   `json:"assignee_ids"`
 }
 
@@ -33,8 +35,10 @@ type UpdateTaskRequest struct {
 	Description *string  `json:"description"`
 	Status      *string  `json:"status"`
 	Priority    *string  `json:"priority"`
+	StartDate   *string  `json:"start_date"`
 	DueDate     *string  `json:"due_date"`
 	CategoryID  *uint    `json:"category_id"`
+	ProjectID   *uint    `json:"project_id"`
 	AssigneeIDs []uint   `json:"assignee_ids"`
 }
 
@@ -51,6 +55,7 @@ type TaskFilter struct {
 	Status      string `json:"status"`
 	Priority    string `json:"priority"`
 	CategoryID  *uint  `json:"category_id"`
+	ProjectID   *uint  `json:"project_id"`
 	AssigneeID  *uint  `json:"assignee_id"`
 	DueDateFrom string `json:"due_date_from"`
 	DueDateTo   string `json:"due_date_to"`
@@ -67,12 +72,13 @@ type PaginatedResponse struct {
 }
 
 type DashboardSummary struct {
-	TotalTasks     int64              `json:"total_tasks"`
-	CompletedTasks int64              `json:"completed_tasks"`
-	PendingTasks   int64              `json:"pending_tasks"`
-	OverdueTasks   int64              `json:"overdue_tasks"`
-	ByCategory     []CategoryCount    `json:"by_category"`
-	ByPriority     []PriorityCount    `json:"by_priority"`
+	TotalTasks   int64           `json:"total_tasks"`
+	TodoTasks    int64           `json:"todo_tasks"`
+	InProgressTasks int64        `json:"in_progress_tasks"`
+	DoneTasks    int64           `json:"done_tasks"`
+	OverdueTasks int64           `json:"overdue_tasks"`
+	ByCategory   []CategoryCount `json:"by_category"`
+	ByPriority   []PriorityCount `json:"by_priority"`
 }
 
 type CategoryCount struct {
@@ -83,6 +89,26 @@ type CategoryCount struct {
 type PriorityCount struct {
 	Priority string `json:"priority"`
 	Count    int64  `json:"count"`
+}
+
+type CreateProjectRequest struct {
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description"`
+	MemberIDs   []uint `json:"member_ids"`
+}
+
+type UpdateProjectRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+	Status      *string `json:"status"`
+}
+
+type AddProjectMemberRequest struct {
+	UserID uint `json:"user_id"`
+}
+
+type InviteMemberRequest struct {
+	Email string `json:"email" validate:"required,email"`
 }
 
 type ErrorResponse struct {

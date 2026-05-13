@@ -100,25 +100,25 @@
 .neu-flat {
   background: oklch(0.96 0.005 260);
   box-shadow:
-    6px 6px 12px oklch(0.88 0.005 260),
-    -6px -6px 12px oklch(1 0 0);
-  border-radius: 1rem;
+    4px 4px 10px oklch(0.88 0.005 260),
+    -4px -4px 10px oklch(1 0 0);
+  border-radius: 1.25rem;
 }
 
 .neu-pressed {
   background: oklch(0.96 0.005 260);
   box-shadow:
-    inset 4px 4px 8px oklch(0.88 0.005 260),
-    inset -4px -4px 8px oklch(1 0 0);
-  border-radius: 1rem;
+    inset 3px 3px 6px oklch(0.88 0.005 260),
+    inset -3px -3px 6px oklch(1 0 0);
+  border-radius: 0.875rem;
 }
 
 .neu-convex {
   background: linear-gradient(145deg, oklch(0.98 0.003 260), oklch(0.93 0.005 260));
   box-shadow:
-    6px 6px 12px oklch(0.88 0.005 260),
-    -6px -6px 12px oklch(1 0 0);
-  border-radius: 1rem;
+    4px 4px 10px oklch(0.88 0.005 260),
+    -4px -4px 10px oklch(1 0 0);
+  border-radius: 0.875rem;
 }
 
 .neu-hover {
@@ -126,7 +126,7 @@
 }
 .neu-hover:hover {
   box-shadow:
-    8px 8px 16px oklch(0.86 0.005 260),
-    -8px -8px 16px oklch(1 0 0);
+    6px 6px 14px oklch(0.86 0.005 260),
+    -6px -6px 14px oklch(1 0 0);
   transform: translateY(-1px);
 }
