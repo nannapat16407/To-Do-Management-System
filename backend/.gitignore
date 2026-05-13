@@ -1,0 +1,8 @@
+server
+.env
+.env.local
+*.exe
+*.test
+*.out
+.next
+.DS_Store

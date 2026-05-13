@@ -38,20 +38,20 @@ function isOverdue(task: Task): boolean {
 
 function getCardStyle(task: Task): string {
   if (isOverdue(task)) {
-    return "rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:shadow-md bg-white border border-red-100";
+    return "rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:shadow-md border border-red-100/80";
   }
   if (task.status === "done") {
-    return "rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:shadow-md bg-white border border-green-100";
+    return "rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:shadow-md border border-green-100/80";
   }
   return "neu-flat p-5 cursor-pointer neu-hover";
 }
 
 function getCardBg(task: Task): React.CSSProperties {
   if (isOverdue(task)) {
-    return { background: "linear-gradient(to right, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.02) 40%, white 100%)" };
+    return { background: "linear-gradient(to right, rgba(239,68,68,0.07) 0%, rgba(239,68,68,0.02) 15%, white 30%)" };
   }
   if (task.status === "done") {
-    return { background: "linear-gradient(to right, rgba(34,197,94,0.08) 0%, rgba(34,197,94,0.02) 40%, white 100%)" };
+    return { background: "linear-gradient(to right, rgba(34,197,94,0.07) 0%, rgba(34,197,94,0.02) 15%, white 30%)" };
   }
   return {};
 }
@@ -217,7 +217,7 @@ export default function MyTasksPage() {
           <p className="text-muted-foreground">No tasks assigned to you.</p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {data.data.map((task) => (
             <Link key={task.id} href={`/tasks/${task.id}`}>
               <div className={getCardStyle(task)} style={getCardBg(task)}>

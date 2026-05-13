@@ -190,31 +190,29 @@ func (r *TaskRepository) CountOverdue(userID uint, isAdmin bool, projectID *uint
 
 func (r *TaskRepository) CountByCategory(userID uint, isAdmin bool, projectID *uint) ([]models.CategoryCount, error) {
 	var results []models.CategoryCount
-	query := r.db.Model(&models.Task{}).
+	query := r.db.Table("tasks").
 		Select("COALESCE(c.name, 'Uncategorized') as category, COUNT(*) as count").
-		Joins("LEFT JOIN categories c ON tasks.category_id = c.id").
-		Group("c.name")
+		Joins("LEFT JOIN categories c ON tasks.category_id = c.id")
 	if !isAdmin {
-		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+		query = query.Where("tasks.created_by = ? OR tasks.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
 	}
 	if projectID != nil {
 		query = query.Where("tasks.project_id = ?", *projectID)
 	}
-	err := query.Find(&results).Error
+	err := query.Group("COALESCE(c.name, 'Uncategorized')").Scan(&results).Error
 	return results, err
 }
 
 func (r *TaskRepository) CountByPriority(userID uint, isAdmin bool, projectID *uint) ([]models.PriorityCount, error) {
 	var results []models.PriorityCount
-	query := r.db.Model(&models.Task{}).
-		Select("priority, COUNT(*) as count").
-		Group("priority")
+	query := r.db.Table("tasks").
+		Select("priority, COUNT(*) as count")
 	if !isAdmin {
-		query = query.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+		query = query.Where("tasks.created_by = ? OR tasks.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
 	}
 	if projectID != nil {
-		query = query.Where("project_id = ?", *projectID)
+		query = query.Where("tasks.project_id = ?", *projectID)
 	}
-	err := query.Find(&results).Error
+	err := query.Group("priority").Scan(&results).Error
 	return results, err
 }
