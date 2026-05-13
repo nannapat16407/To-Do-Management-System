@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"backend/internal/config"
@@ -61,7 +62,7 @@ func main() {
 	// Routes
 	api := app.Group("/api")
 
-	// Health check endpoint for Railway
+	// Health check endpoint
 	api.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status": "ok",
@@ -69,65 +70,59 @@ func main() {
 		})
 	})
 
+	// Log all registered routes for debugging
+	app.Stack().Print()
+
+	// Public routes
 	api.Post("/auth/register", authHandler.Register)
 	api.Post("/auth/login", authHandler.Login)
 
-	protected := api.Use(middleware.JWTProtected(cfg))
+	// Protected routes - apply JWT middleware
+	api.Use(middleware.JWTProtected(cfg))
 
-	protected.Get("/users", middleware.RoleRequired(models.RoleAdmin), userHandler.GetAll)
-	protected.Get("/users/:id", middleware.RoleRequired(models.RoleAdmin), userHandler.GetByID)
+	// Task routes (all require JWT)
+	api.Get("/tasks", taskHandler.GetAll)
+	api.Post("/tasks", taskHandler.Create)
+	api.Get("/tasks/:id", taskHandler.GetByID)
+	api.Put("/tasks/:id", taskHandler.Update)
+	api.Delete("/tasks/:id", taskHandler.Delete)
 
-	protected.Get("/tasks", taskHandler.GetAll)
-	protected.Post("/tasks", taskHandler.Create)
-	protected.Get("/tasks/:id", taskHandler.GetByID)
-	protected.Put("/tasks/:id", taskHandler.Update)
-	protected.Delete("/tasks/:id", taskHandler.Delete)
+	// Other protected routes
+	api.Get("/categories", catHandler.GetAll)
+	api.Post("/categories", catHandler.Create)
+	api.Put("/categories/:id", catHandler.Update)
+	api.Delete("/categories/:id", catHandler.Delete)
 
-	protected.Get("/categories", catHandler.GetAll)
-	protected.Post("/categories", catHandler.Create)
-	protected.Put("/categories/:id", catHandler.Update)
-	protected.Delete("/categories/:id", catHandler.Delete)
+	api.Get("/dashboard/summary", dashHandler.GetSummary)
 
-	protected.Get("/dashboard/summary", dashHandler.GetSummary)
+	api.Get("/notifications", notifHandler.GetAll)
+	api.Get("/notifications/unread-count", notifHandler.GetUnreadCount)
+	api.Put("/notifications/:id/read", notifHandler.MarkRead)
+	api.Put("/notifications/read-all", notifHandler.MarkAllRead)
+	api.Put("/notifications/:id/accept", notifHandler.AcceptInvitation)
+	api.Put("/notifications/:id/decline", notifHandler.DeclineInvitation)
 
-	protected.Get("/notifications", notifHandler.GetAll)
-	protected.Get("/notifications/unread-count", notifHandler.GetUnreadCount)
-	protected.Put("/notifications/:id/read", notifHandler.MarkRead)
-	protected.Put("/notifications/read-all", notifHandler.MarkAllRead)
-	protected.Put("/notifications/:id/accept", notifHandler.AcceptInvitation)
-	protected.Put("/notifications/:id/decline", notifHandler.DeclineInvitation)
+	api.Put("/users/avatar", avatarHandler.UpdateAvatar)
 
-	protected.Put("/users/avatar", avatarHandler.UpdateAvatar)
+	api.Get("/projects", projectHandler.GetAll)
+	api.Post("/projects", projectHandler.Create)
+	api.Get("/projects/:id", projectHandler.GetByID)
+	api.Put("/projects/:id", projectHandler.Update)
+	api.Delete("/projects/:id", projectHandler.Delete)
+	api.Post("/projects/:id/members", projectHandler.AddMember)
+	api.Post("/projects/:id/invite", projectHandler.InviteMember)
+	api.Delete("/projects/:id/members/:userId", projectHandler.RemoveMember)
 
-	protected.Get("/projects", projectHandler.GetAll)
-	protected.Post("/projects", projectHandler.Create)
-	protected.Get("/projects/:id", projectHandler.GetByID)
-	protected.Put("/projects/:id", projectHandler.Update)
-	protected.Delete("/projects/:id", projectHandler.Delete)
-	protected.Post("/projects/:id/members", projectHandler.AddMember)
-	protected.Post("/projects/:id/invite", projectHandler.InviteMember)
-	protected.Delete("/projects/:id/members/:userId", projectHandler.RemoveMember)
-
-	// Start background deadline reminder scheduler
+	// Start background services
 	notifService.StartReminderScheduler()
 
-	// Log all registered routes for debugging
 	log.Printf("Server starting on port %s", cfg.Port)
-	log.Printf("=== REGISTERED ROUTES ===")
-	tasksRouteFound := false
+	log.Printf("Registered routes:")
 	for _, stack := range app.Stack() {
 		for _, route := range stack.Routes {
-			routeType := "PUBLIC"
-			if route.Path == "/api/tasks" {
-				tasksRouteFound = true
-				routeType = "PROTECTED (JWT)"
-			}
-			log.Printf("Method: %-6s Path: %-30s Type: %s", route.Method, route.Path, routeType)
+			log.Printf("Method: %s, Path: %s", route.Method, route.Path)
 		}
 	}
-	log.Printf("========================")
-	log.Printf("✅ /api/tasks route registered: %v", tasksRouteFound)
-	log.Printf("========================")
 
 	if err := app.Listen(":" + cfg.Port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

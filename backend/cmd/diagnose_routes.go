@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"backend/internal/config"
@@ -28,6 +29,8 @@ func main() {
 			}
 			return c.Status(code).JSON(fiber.Map{"error": err.Error()})
 		},
+		// Add detailed error logging
+		DisableStartupMessage: false,
 	})
 
 	app.Use(middleware.CORS(cfg))
@@ -43,7 +46,7 @@ func main() {
 	// Services
 	authService := services.NewAuthService(userRepo, cfg)
 	taskService := services.NewTaskService(taskRepo, userRepo, activityRepo, projectRepo)
-	catService := services.NewCategoryService(catRepo)
+	catService := services.NewCategoryService(catService)
 	dashService := services.NewDashboardService(taskRepo)
 	notifService := services.NewNotificationService(notifRepo, projectRepo)
 	projectService := services.NewProjectService(projectRepo, notifRepo)
@@ -58,10 +61,14 @@ func main() {
 	avatarHandler := handlers.NewAvatarHandler(userRepo)
 	projectHandler := handlers.NewProjectHandler(projectService)
 
+	// Verify handlers are not nil
+	log.Printf("taskHandler is nil: %v", taskHandler == nil)
+	log.Printf("taskHandler.GetAll is nil: %v", taskHandler.GetAll == nil)
+
 	// Routes
 	api := app.Group("/api")
 
-	// Health check endpoint for Railway
+	// Health check endpoint
 	api.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status": "ok",
@@ -69,66 +76,49 @@ func main() {
 		})
 	})
 
+	// Public routes (no JWT required)
 	api.Post("/auth/register", authHandler.Register)
 	api.Post("/auth/login", authHandler.Login)
 
-	protected := api.Use(middleware.JWTProtected(cfg))
+	// DIAGNOSTIC: Test protected route WITHOUT JWT
+	api.Get("/tasks-debug", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"message": "tasks-debug works without JWT",
+			"route_registered": true,
+		})
+	})
 
-	protected.Get("/users", middleware.RoleRequired(models.RoleAdmin), userHandler.GetAll)
-	protected.Get("/users/:id", middleware.RoleRequired(models.RoleAdmin), userHandler.GetByID)
+	// Apply JWT middleware to subsequent routes
+	log.Printf("Applying JWT middleware...")
+	api.Use(middleware.JWTProtected(cfg))
+	log.Printf("JWT middleware applied")
 
-	protected.Get("/tasks", taskHandler.GetAll)
-	protected.Post("/tasks", taskHandler.Create)
-	protected.Get("/tasks/:id", taskHandler.GetByID)
-	protected.Put("/tasks/:id", taskHandler.Update)
-	protected.Delete("/tasks/:id", taskHandler.Delete)
+	// Protected routes (require JWT)
+	api.Get("/tasks", taskHandler.GetAll)
+	api.Post("/tasks", taskHandler.Create)
+	api.Get("/tasks/:id", taskHandler.GetByID)
+	api.Put("/tasks/:id", taskHandler.Update)
+	api.Delete("/tasks/:id", taskHandler.Delete)
 
-	protected.Get("/categories", catHandler.GetAll)
-	protected.Post("/categories", catHandler.Create)
-	protected.Put("/categories/:id", catHandler.Update)
-	protected.Delete("/categories/:id", catHandler.Delete)
-
-	protected.Get("/dashboard/summary", dashHandler.GetSummary)
-
-	protected.Get("/notifications", notifHandler.GetAll)
-	protected.Get("/notifications/unread-count", notifHandler.GetUnreadCount)
-	protected.Put("/notifications/:id/read", notifHandler.MarkRead)
-	protected.Put("/notifications/read-all", notifHandler.MarkAllRead)
-	protected.Put("/notifications/:id/accept", notifHandler.AcceptInvitation)
-	protected.Put("/notifications/:id/decline", notifHandler.DeclineInvitation)
-
-	protected.Put("/users/avatar", avatarHandler.UpdateAvatar)
-
-	protected.Get("/projects", projectHandler.GetAll)
-	protected.Post("/projects", projectHandler.Create)
-	protected.Get("/projects/:id", projectHandler.GetByID)
-	protected.Put("/projects/:id", projectHandler.Update)
-	protected.Delete("/projects/:id", projectHandler.Delete)
-	protected.Post("/projects/:id/members", projectHandler.AddMember)
-	protected.Post("/projects/:id/invite", projectHandler.InviteMember)
-	protected.Delete("/projects/:id/members/:userId", projectHandler.RemoveMember)
-
-	// Start background deadline reminder scheduler
-	notifService.StartReminderScheduler()
-
-	// Log all registered routes for debugging
-	log.Printf("Server starting on port %s", cfg.Port)
+	// Log all registered routes
 	log.Printf("=== REGISTERED ROUTES ===")
-	tasksRouteFound := false
 	for _, stack := range app.Stack() {
 		for _, route := range stack.Routes {
 			routeType := "PUBLIC"
-			if route.Path == "/api/tasks" {
-				tasksRouteFound = true
-				routeType = "PROTECTED (JWT)"
+			for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
+				if route.Method == method && route.Path == "/api/tasks" {
+					routeType = "PROTECTED (JWT)"
+				}
 			}
 			log.Printf("Method: %-6s Path: %-30s Type: %s", route.Method, route.Path, routeType)
 		}
 	}
 	log.Printf("========================")
-	log.Printf("✅ /api/tasks route registered: %v", tasksRouteFound)
-	log.Printf("========================")
 
+	// Start background services
+	notifService.StartReminderScheduler()
+
+	log.Printf("Server starting on port %s", cfg.Port)
 	if err := app.Listen(":" + cfg.Port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
