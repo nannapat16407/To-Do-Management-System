@@ -61,6 +61,14 @@ func main() {
 	// Routes
 	api := app.Group("/api")
 
+	// Health check endpoint for Railway
+	api.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status": "ok",
+			"message": "backend running",
+		})
+	})
+
 	api.Post("/auth/register", authHandler.Register)
 	api.Post("/auth/login", authHandler.Login)
 
