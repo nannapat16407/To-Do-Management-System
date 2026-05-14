@@ -81,11 +81,9 @@ func (s *TaskService) Create(req *models.CreateTaskRequest, userID uint) (*model
 
 	// Validate all assignees are project members
 	if req.ProjectID != nil {
-		for _, aid := range assigneeIDs {
-			isMember, err := s.projectRepo.IsMember(*req.ProjectID, aid)
-			if err != nil || !isMember {
-				return nil, errors.New("assigned user must be a member of this project")
-			}
+		isMember, err := s.projectRepo.AreMembers(*req.ProjectID, assigneeIDs)
+		if err != nil || !isMember {
+			return nil, errors.New("assigned user must be a member of this project")
 		}
 	}
 
@@ -170,11 +168,9 @@ func (s *TaskService) Update(id uint, req *models.UpdateTaskRequest, userID uint
 		effectiveProjectID = req.ProjectID
 	}
 	if effectiveProjectID != nil && len(assigneeIDs) > 0 {
-		for _, aid := range assigneeIDs {
-			isMember, err := s.projectRepo.IsMember(*effectiveProjectID, aid)
-			if err != nil || !isMember {
-				return nil, errors.New("assigned user must be a member of this project")
-			}
+		isMember, err := s.projectRepo.AreMembers(*effectiveProjectID, assigneeIDs)
+		if err != nil || !isMember {
+			return nil, errors.New("assigned user must be a member of this project")
 		}
 	}
 

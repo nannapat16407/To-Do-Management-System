@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -37,11 +38,11 @@ func Load() *Config {
 		JWTSecret:   getEnv("JWT_SECRET", "change-me-in-production"),
 		Port:        getEnv("PORT", "8080"),
 		Env:         getEnv("APP_ENV", "development"),
-		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3000"),
+		FrontendURL: getEnv("FRONTEND_URL", ""),
 	}
 
-	if dbURL != "" {
-		cfg.DBSSLMode = ""
+	if dbURL != "" && !strings.Contains(dbURL, "sslmode=") {
+		cfg.DBURL = dbURL + "?sslmode=require"
 	}
 
 	return cfg

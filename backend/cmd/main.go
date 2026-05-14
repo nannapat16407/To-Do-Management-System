@@ -16,6 +16,13 @@ import (
 func main() {
 	cfg := config.Load()
 
+	if cfg.FrontendURL == "" && cfg.Env == "production" {
+		log.Fatal("FRONTEND_URL must be set in production")
+	}
+	if cfg.JWTSecret == "change-me-in-production" && cfg.Env == "production" {
+		log.Fatal("JWT_SECRET must be set in production")
+	}
+
 	db := config.ConnectDB(cfg)
 	config.Migrate(db)
 	config.SeedAdminUser(db)

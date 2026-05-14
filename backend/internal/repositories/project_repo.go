@@ -97,6 +97,17 @@ func (r *ProjectRepository) FindByUserID(userID uint) ([]models.Project, error) 
 	return projects, nil
 }
 
+func (r *ProjectRepository) AreMembers(projectID uint, userIDs []uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.ProjectMember{}).
+		Where("project_id = ? AND user_id IN ?", projectID, userIDs).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count == int64(len(userIDs)), nil
+}
+
 func (r *ProjectRepository) IsMember(projectID, userID uint) (bool, error) {
 	var count int64
 	err := r.db.Model(&models.ProjectMember{}).
