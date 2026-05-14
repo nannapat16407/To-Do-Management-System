@@ -30,7 +30,8 @@ export default function NotificationDropdown() {
       const res = await api.get<{ unread_count: number }>("/notifications/unread-count");
       return res.data;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: notifResult } = useQuery({

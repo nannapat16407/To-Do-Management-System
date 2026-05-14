@@ -1,13 +1,13 @@
 FROM golang:1.23-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 RUN go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /build/server ./cmd/main.go
 
 FROM alpine:3.19
 
@@ -15,7 +15,7 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /server /app/server
+COPY --from=builder /build/server /app/server
 
 EXPOSE 8080
 

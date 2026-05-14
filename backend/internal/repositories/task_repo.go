@@ -216,3 +216,63 @@ func (r *TaskRepository) CountByPriority(userID uint, isAdmin bool, projectID *u
 	err := query.Group("priority").Scan(&results).Error
 	return results, err
 }
+
+// StatusCountResult holds counts grouped by status from a single query
+type StatusCountResult struct {
+	Status string `json:"status"`
+	Count  int64  `json:"count"`
+}
+
+// GetDashboardStats returns all status counts + overdue count + total in a single query,
+// plus category and priority breakdowns in two additional queries (3 total instead of 7).
+func (r *TaskRepository) GetDashboardStats(userID uint, isAdmin bool, projectID *uint) (total int64, statusCounts map[string]int64, overdue int64, byCategory []models.CategoryCount, byPriority []models.PriorityCount, err error) {
+	statusCounts = map[string]int64{}
+
+	// Query 1: Status counts + total + overdue in one scan
+	var statusResults []StatusCountResult
+	statusQuery := r.db.Table("tasks").
+		Select("status, COUNT(*) as count")
+	if !isAdmin {
+		statusQuery = statusQuery.Where("tasks.created_by = ? OR tasks.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+	}
+	if projectID != nil {
+		statusQuery = statusQuery.Where("tasks.project_id = ?", *projectID)
+	}
+	if qErr := statusQuery.Group("status").Scan(&statusResults).Error; qErr != nil {
+		return 0, nil, 0, nil, nil, qErr
+	}
+
+	now := time.Now()
+	today := strings.Split(now.Format("2006-01-02T15:04:05"), "T")[0]
+	for _, sr := range statusResults {
+		statusCounts[sr.Status] = sr.Count
+		total += sr.Count
+	}
+
+	// Query 1b: Overdue count
+	overdueQuery := r.db.Model(&models.Task{}).
+		Where("status != ? AND due_date IS NOT NULL AND due_date < ?", models.StatusDone, today)
+	if !isAdmin {
+		overdueQuery = overdueQuery.Where("created_by = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)", userID, userID)
+	}
+	if projectID != nil {
+		overdueQuery = overdueQuery.Where("project_id = ?", *projectID)
+	}
+	if qErr := overdueQuery.Count(&overdue).Error; qErr != nil {
+		return 0, nil, 0, nil, nil, qErr
+	}
+
+	// Query 2: Category breakdown
+	byCategory, err = r.CountByCategory(userID, isAdmin, projectID)
+	if err != nil {
+		return 0, nil, 0, nil, nil, err
+	}
+
+	// Query 3: Priority breakdown
+	byPriority, err = r.CountByPriority(userID, isAdmin, projectID)
+	if err != nil {
+		return 0, nil, 0, nil, nil, err
+	}
+
+	return total, statusCounts, overdue, byCategory, byPriority, nil
+}
