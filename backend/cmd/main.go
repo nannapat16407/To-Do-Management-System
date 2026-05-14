@@ -58,13 +58,20 @@ func main() {
 	avatarHandler := handlers.NewAvatarHandler(userRepo)
 	projectHandler := handlers.NewProjectHandler(projectService)
 
+	// Health check endpoint at root (for Fly.io) and /api
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status":  "ok",
+			"message": "backend running",
+		})
+	})
+
 	// Routes
 	api := app.Group("/api")
 
-	// Health check endpoint for Railway
 	api.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"status": "ok",
+			"status":  "ok",
 			"message": "backend running",
 		})
 	})
@@ -111,23 +118,6 @@ func main() {
 	// Start background deadline reminder scheduler
 	notifService.StartReminderScheduler()
 
-	// Log all registered routes for debugging
-	log.Printf("Server starting on port %s", cfg.Port)
-	log.Printf("=== REGISTERED ROUTES ===")
-	tasksRouteFound := false
-	for _, stack := range app.Stack() {
-		for _, route := range stack.Routes {
-			routeType := "PUBLIC"
-			if route.Path == "/api/tasks" {
-				tasksRouteFound = true
-				routeType = "PROTECTED (JWT)"
-			}
-			log.Printf("Method: %-6s Path: %-30s Type: %s", route.Method, route.Path, routeType)
-		}
-	}
-	log.Printf("========================")
-	log.Printf("✅ /api/tasks route registered: %v", tasksRouteFound)
-	log.Printf("========================")
 
 	if err := app.Listen(":" + cfg.Port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

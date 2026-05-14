@@ -14,8 +14,14 @@ import (
 
 func ConnectDB(cfg *Config) *gorm.DB {
 	dsn := cfg.DSN()
+
+	logLevel := logger.Info
+	if cfg.Env == "production" {
+		logLevel = logger.Warn
+	}
+
 	gormCfg := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logLevel),
 	}
 
 	var db *gorm.DB
